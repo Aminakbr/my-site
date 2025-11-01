@@ -13,8 +13,6 @@ import {
   YAxis,
 } from "recharts";
 import { Calculator, Battery, Zap } from "lucide-react";
-import jsPDF from "jspdf";
-import html2canvas from "html2canvas";
 import Image from "next/image";
 
 /* ──────────────────────────────── CONSTANTS ──────────────────────────────── */
@@ -93,7 +91,7 @@ export default function HomeUpsPage() {
   const [search, setSearch] = useState<string>("");
   const [searchIndex, setSearchIndex] = useState<number | null>(null);
 
-  // NEW: user-tweakable PF & inverter efficiency
+  // user-tweakable PF & inverter efficiency
   const [pf, setPf] = useState<number>(0.8);
   const [eta, setEta] = useState<number>(0.88);
 
@@ -129,7 +127,8 @@ export default function HomeUpsPage() {
       return;
     }
 
-    const upsVA = totalWatts / Math.max(0.6, Math.min(pf, 1));
+    const clampedPf = Math.max(0.6, Math.min(pf, 1));
+    const upsVA = totalWatts / clampedPf;
     const suggestedUPS =
       STANDARD_UPS_SIZES.find((s) => s >= upsVA) ||
       STANDARD_UPS_SIZES[STANDARD_UPS_SIZES.length - 1];
@@ -142,11 +141,11 @@ export default function HomeUpsPage() {
     const eff = Math.max(0.75, Math.min(eta, 0.98));
     const I = totalWatts / (vdc * eff);
 
-    const requiredAhPerString = (I * H) * Math.pow(targetHours / H, 1 / k);
+    const requiredAhPerString = I * H * Math.pow(targetHours / H, 1 / k);
 
     setResult({
       totalWatts,
-      pf: Math.max(0.6, Math.min(pf, 1)),
+      pf: clampedPf,
       eta: eff,
       upsVA,
       suggestedUPS,
@@ -184,29 +183,60 @@ export default function HomeUpsPage() {
     setMeetsTarget(meets);
   };
 
-  /* ───────────── PDF EXPORT (multi-page) ───────────── */
+  /* ───────────── PDF EXPORT (robust + multi-page) ───────────── */
   const downloadReport = async () => {
-    const element = document.getElementById("report-section");
-    if (!element) return;
-    const canvas = await html2canvas(element, {
+    if (typeof window === "undefined") return;
+
+    const section = document.getElementById("report-section");
+    if (!section) return;
+
+    // Temporarily reduce transitions to avoid capture artifacts
+    const originalTransition = section.style.transition;
+    section.style.transition = "none";
+
+    // Dynamic import to avoid SSR issues
+    const [{ default: html2canvas }, jsPDFModule] = await Promise.all([
+      import("html2canvas"),
+      import("jspdf"),
+    ]);
+    const { jsPDF } = jsPDFModule as unknown as { jsPDF: typeof import("jspdf").jsPDF };
+
+    // brief wait for fonts/images
+    await new Promise((r) => setTimeout(r, 50));
+
+    const canvas = await html2canvas(section, {
       backgroundColor: "#1f2937",
       useCORS: true,
-      scale: 2,
+      scale: Math.min(2, window.devicePixelRatio || 1),
+      logging: false,
+      // Skip live tooltips or any element you mark as no-print
+      ignoreElements: (el: Element) => {
+        const cls = (el as HTMLElement).className?.toString?.() || "";
+        const hasNoPrint = cls.includes("no-print");
+        const isRechartsTooltip = cls.includes("recharts-default-tooltip");
+        return hasNoPrint || isRechartsTooltip;
+      },
     });
-    const imgData = canvas.toDataURL("image/png");
-    const pdf = new jsPDF("p", "mm", "a4");
 
+    // Restore styles
+    section.style.transition = originalTransition;
+
+    const imgData = canvas.toDataURL("image/png");
+
+    const pdf = new jsPDF("p", "mm", "a4");
     const pageW = pdf.internal.pageSize.getWidth();
     const pageH = pdf.internal.pageSize.getHeight();
+
     const imgW = pageW;
     const imgH = (canvas.height * imgW) / canvas.width;
 
-    let y = 0;
-    while (y < imgH) {
-      if (y > 0) pdf.addPage();
-      pdf.addImage(imgData, "PNG", 0, -y, imgW, imgH);
-      y += pageH;
+    let yOffset = 0;
+    while (yOffset < imgH) {
+      if (yOffset > 0) pdf.addPage();
+      pdf.addImage(imgData, "PNG", 0, -yOffset, imgW, imgH, undefined, "FAST");
+      yOffset += pageH;
     }
+
     pdf.save("UPS_Report.pdf");
   };
 
@@ -222,7 +252,7 @@ export default function HomeUpsPage() {
 
   // C-rate per string (informational)
   const cRatePerString = selectedBatteryAh && result
-    ? (result.dischargeCurrentA / selectedBatteryAh)
+    ? result.dischargeCurrentA / selectedBatteryAh
     : 0;
 
   /* ───────────── UI ───────────── */
@@ -255,7 +285,7 @@ export default function HomeUpsPage() {
           </ul>
           <div className="my-4 text-center">
             <Image
-              src="/ups-types-diagram.png"
+              src="/ups-types-diagram.png" // keep this image in /public to avoid CORS
               alt="UPS comparison"
               width={600}
               height={300}
@@ -270,7 +300,7 @@ export default function HomeUpsPage() {
             <BarChart data={efficiencyData}>
               <XAxis dataKey="type" />
               <YAxis />
-              <RechartsTooltip />
+              <RechartsTooltip wrapperClassName="recharts-default-tooltip no-print" />
               <Bar dataKey="efficiency" fill="#22c55e" radius={8} />
             </BarChart>
           </ResponsiveContainer>
@@ -497,7 +527,7 @@ export default function HomeUpsPage() {
                           <Cell key={i} fill={COLORS[i % COLORS.length]} />
                         ))}
                       </Pie>
-                      <RechartsTooltip />
+                      <RechartsTooltip wrapperClassName="recharts-default-tooltip no-print" />
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
