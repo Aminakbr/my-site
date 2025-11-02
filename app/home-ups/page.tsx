@@ -3,8 +3,8 @@ import { useRef, useState } from "react";
 import { Printer } from "lucide-react";
 import { useReactToPrint } from "react-to-print";
 
-import IntroSection from "../../components/IntroSection";
 import CalculatorSection from "../../components/CalculatorSection";
+import IntroSection from "../../components/IntroSection";
 import {
   Chem,
   Device,
@@ -44,7 +44,7 @@ export default function HomeUpsPage() {
       html, body { background: #ffffff !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
       .no-print { display: none !important; }
       .print-card { break-inside: avoid; page-break-inside: avoid; }
-      .print-break { page-break-before: always; break-before: page; } /* <-- manual page break */
+      .print-break { page-break-before: always; break-before: page; } /* manual page break */
     `,
   });
 
@@ -156,8 +156,7 @@ export default function HomeUpsPage() {
         id="report-section"
         className="flex flex-col items-center py-8 px-4 sm:px-8 bg-white text-gray-900"
       >
-        <IntroSection />
-
+        {/* 1) Calculator FIRST */}
         <CalculatorSection
           devices={devices}
           setDevices={setDevices}
@@ -185,6 +184,12 @@ export default function HomeUpsPage() {
           setSearchIndex={setSearchIndex}
           onSelectLibraryItem={handleSelect}
         />
+
+        {/* Optional: page break before the long description when printing */}
+        <div className="print-break" />
+
+        {/* 2) Description SECOND */}
+        <IntroSection />
 
         <footer className="mt-10 py-4 text-center text-gray-600 text-sm border-t border-gray-200 w-full max-w-3xl">
           © 2025 Smart UPS Calculator — Built by Amina ⚡
