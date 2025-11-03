@@ -44,7 +44,7 @@ export default function HomeUpsPage() {
       html, body { background: #ffffff !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
       .no-print { display: none !important; }
       .print-card { break-inside: avoid; page-break-inside: avoid; }
-      .print-break { page-break-before: always; break-before: page; } /* manual page break */
+      .print-break { page-break-before: always; break-before: page; }
     `,
   });
 
@@ -129,7 +129,11 @@ export default function HomeUpsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 text-white">
+    // Suppress hydration warnings from extensions injecting attributes (e.g., fdprocessedid)
+    <div
+      className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 text-white"
+      suppressHydrationWarning
+    >
       <style jsx global>{`
         @media print {
           body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -139,12 +143,16 @@ export default function HomeUpsPage() {
       `}</style>
 
       {/* Header */}
-      <header className="w-full bg-gray-900/80 border-b border-gray-700 py-3 px-6 flex justify-between items-center print-bg-white">
+      <header
+        className="w-full bg-gray-900/80 border-b border-gray-700 py-3 px-6 flex justify-between items-center print-bg-white"
+        suppressHydrationWarning
+      >
         <h1 className="text-2xl font-bold text-green-600">🔋 Smart UPS Designer</h1>
         <button
           onClick={handlePrint}
           className="no-print inline-flex items-center gap-2 bg-white text-gray-900 px-3 py-2 rounded shadow hover:shadow-md"
           aria-label="Print or Save as PDF"
+          suppressHydrationWarning
         >
           <Printer className="w-4 h-4" /> Print / Save as PDF
         </button>
@@ -155,6 +163,7 @@ export default function HomeUpsPage() {
         ref={reportRef}
         id="report-section"
         className="flex flex-col items-center py-8 px-4 sm:px-8 bg-white text-gray-900"
+        suppressHydrationWarning
       >
         {/* 1) Calculator FIRST */}
         <CalculatorSection

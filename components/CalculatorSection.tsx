@@ -7,7 +7,7 @@ import {
   Tooltip as RechartsTooltip,
   ResponsiveContainer,
 } from "recharts";
-import { Calculator, Battery, Zap } from "lucide-react";
+import { Calculator, Battery, Zap, PlusCircle, Info } from "lucide-react";
 import {
   Device,
   Chem,
@@ -72,6 +72,12 @@ const LIBRARY: Device[] = [
   { name: "Electric Kettle", watts: 1200 },
 ];
 
+// consistent sizing helpers
+const inputBase =
+  "h-10 px-3 rounded bg-gray-100 text-gray-900 border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-600/30";
+const btnBase =
+  "h-10 px-4 rounded font-medium transition-all duration-150 active:translate-y-px";
+
 export default function CalculatorSection(props: Props) {
   const {
     devices,
@@ -114,43 +120,100 @@ export default function CalculatorSection(props: Props) {
       animate={{ opacity: 1, y: 0 }}
       className="bg-white border border-gray-200 p-6 rounded-2xl shadow w-full max-w-3xl space-y-6"
     >
-      <h2 className="text-2xl font-bold flex items-center gap-2">
-        <Calculator className="text-green-600 w-6 h-6" /> UPS & Battery Calculator
-      </h2>
+      {/* Title + beautiful Add button */}
+      <div className="flex items-center justify-between">
+        <h2 className="text-2xl font-bold flex items-center gap-2">
+          <Calculator className="text-green-600 w-6 h-6" /> UPS & Battery Calculator
+        </h2>
+        <button
+          onClick={addDevice}
+          className={`${btnBase} no-print inline-flex items-center gap-2 bg-gradient-to-r from-green-600 to-emerald-600 text-white shadow hover:shadow-md`}
+          aria-label="Add device"
+          title="Add a new device row"
+        >
+          <PlusCircle className="w-5 h-5" />
+          Add Device
+        </button>
+      </div>
 
-      {/* Device Inputs */}
+      {/* Device rows: single-line layout */}
       {devices.map((device, i) => {
         const suggestions = LIBRARY.filter((d) =>
           d.name.toLowerCase().includes((search ?? "").toLowerCase())
         ).slice(0, 8);
 
         return (
-          <div key={i} className="mb-5 relative">
-            <label htmlFor={`device-name-${i}`} className="sr-only">
-              Device name
-            </label>
-            <input
-              id={`device-name-${i}`}
-              type="text"
-              className="w-full p-2 rounded bg-gray-100 text-gray-900 border border-gray-300"
-              placeholder="🔍 Search or type device name..."
-              value={device.name}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                const val = e.target.value;
-                setDevices((prev) => {
-                  const copy = [...prev];
-                  copy[i] = { ...copy[i], name: val };
-                  return copy;
-                });
-                setSearchIndex(i);
-                setSearch(val);
-              }}
-              onFocus={() => setSearchIndex(i)}
-              aria-label="Device name"
-            />
+          <div key={i} className="relative">
+            {/* one row: name | watts | remove */}
+            <div className="grid grid-cols-12 gap-3 items-center">
+              {/* Name (flex) */}
+              <div className="col-span-12 md:col-span-8">
+                <label htmlFor={`device-name-${i}`} className="sr-only">
+                  Device name
+                </label>
+                <input
+                  id={`device-name-${i}`}
+                  type="text"
+                  className={`${inputBase} w-full`}
+                  placeholder="🔍 Search or type device name..."
+                  value={device.name}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                    const val = e.target.value;
+                    setDevices((prev) => {
+                      const copy = [...prev];
+                      copy[i] = { ...copy[i], name: val };
+                      return copy;
+                    });
+                    setSearchIndex(i);
+                    setSearch(val);
+                  }}
+                  onFocus={() => setSearchIndex(i)}
+                  aria-label="Device name"
+                />
+              </div>
 
+              {/* Watts */}
+              <div className="col-span-6 md:col-span-2">
+                <label htmlFor={`device-watts-${i}`} className="sr-only">
+                  Watts
+                </label>
+                <input
+                  id={`device-watts-${i}`}
+                  type="number"
+                  className={`${inputBase} w-full`}
+                  placeholder="Watts"
+                  value={device.watts || ""}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                    const watts = Number(e.target.value);
+                    setDevices((prev) => {
+                      const copy = [...prev];
+                      copy[i] = { ...copy[i], watts };
+                      return copy;
+                    });
+                  }}
+                  aria-label="Device watts"
+                  min={0}
+                />
+              </div>
+
+              {/* Remove */}
+              <div className="col-span-6 md:col-span-2">
+                <button
+                  className={`${btnBase} w-full bg-red-600 hover:bg-red-700 text-white no-print`}
+                  onClick={() => removeDevice(i)}
+                  aria-label="Remove device"
+                >
+                  Remove
+                </button>
+              </div>
+            </div>
+
+            {/* Suggestions dropdown (full width under name input) */}
             {search && searchIndex === i && (
-              <div className="absolute z-10 bg-white w-full mt-1 rounded max-h-40 overflow-y-auto border border-gray-300 no-print">
+              <div className="absolute z-10 left-0 right-0 mt-1 rounded max-h-40 overflow-y-auto border border-gray-300 bg-white no-print">
+                {suggestions.length === 0 && (
+                  <div className="p-2 text-sm text-gray-500">No matches</div>
+                )}
                 {suggestions.map((d) => (
                   <div
                     key={d.name}
@@ -164,122 +227,90 @@ export default function CalculatorSection(props: Props) {
                 ))}
               </div>
             )}
-
-            <div className="flex gap-3 mt-2 items-center">
-              <label htmlFor={`device-watts-${i}`} className="sr-only">
-                Watts
-              </label>
-              <input
-                id={`device-watts-${i}`}
-                type="number"
-                className="w-32 p-2 rounded bg-gray-100 text-gray-900 border border-gray-300"
-                placeholder="Watts"
-                value={device.watts || ""}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                  const watts = Number(e.target.value);
-                  setDevices((prev) => {
-                    const copy = [...prev];
-                    copy[i] = { ...copy[i], watts };
-                    return copy;
-                  });
-                }}
-                aria-label="Device watts"
-                min={0}
-              />
-              <button
-                className="no-print bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded"
-                onClick={() => removeDevice(i)}
-                aria-label="Remove device"
-              >
-                Remove
-              </button>
-            </div>
           </div>
         );
       })}
 
-      {/* Controls */}
-      <div className="flex flex-wrap gap-3 justify-between items-end">
-        <button
-          onClick={addDevice}
-          className="no-print bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
-          aria-label="Add device"
-        >
-          + Add Device
-        </button>
-        <div className="flex flex-col sm:flex-row gap-3">
-          <div>
-            <label className="block text-gray-600 text-sm" htmlFor="battery-type">
-              Battery Type
-            </label>
-            <select
-              id="battery-type"
-              className="bg-gray-100 text-gray-900 p-2 rounded border border-gray-300"
-              value={batteryType}
-              onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
-                setBatteryType(e.target.value as Chem)
-              }
-            >
-              <option value="leadacid">Lead-Acid (k=1.20, H=20h)</option>
-              <option value="agm">AGM / Gel (k=1.15, H=20h)</option>
-              <option value="lifepo4">LiFePO₄ (k=1.05, H=1h)</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-gray-600 text-sm" htmlFor="target-min">
-              Target Backup (minutes)
-            </label>
-            <input
-              id="target-min"
-              type="number"
-              value={backupTimeMin}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                setBackupTimeMin(Number(e.target.value))
-              }
-              className="w-28 p-2 rounded bg-gray-100 text-gray-900 border border-gray-300"
-              min={0}
-            />
-          </div>
-          <div>
-            <label className="block text-gray-600 text-sm" htmlFor="pf">
-              Power Factor
-            </label>
-            <input
-              id="pf"
-              type="number"
-              step={0.01}
-              min={0.6}
-              max={1}
-              value={pf}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                setPf(Number(e.target.value))
-              }
-              className="w-24 p-2 rounded bg-gray-100 text-gray-900 border border-gray-300"
-            />
-          </div>
-          <div>
-            <label className="block text-gray-600 text-sm" htmlFor="eta">
-              Inverter η
-            </label>
-            <input
-              id="eta"
-              type="number"
-              step={0.01}
-              min={0.75}
-              max={0.98}
-              value={eta}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                setEta(Number(e.target.value))
-              }
-              className="w-24 p-2 rounded bg-gray-100 text-gray-900 border border-gray-300"
-            />
-          </div>
+      {/* Controls: equal-width 4-column grid, uniform inputs */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+        <div>
+          <label className="block text-gray-600 text-sm mb-1" htmlFor="battery-type">
+            Battery Type
+          </label>
+          <select
+            id="battery-type"
+            className={`${inputBase} w-full`}
+            value={batteryType}
+            onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
+              setBatteryType(e.target.value as Chem)
+            }
+          >
+            <option value="leadacid">Lead-Acid (k=1.20, H=20h)</option>
+            <option value="agm">AGM / Gel (k=1.15, H=20h)</option>
+            <option value="lifepo4">LiFePO₄ (k=1.05, H=1h)</option>
+          </select>
         </div>
+
+        <div>
+          <label className="block text-gray-600 text-sm mb-1" htmlFor="target-min">
+            Target Backup (minutes)
+          </label>
+          <input
+            id="target-min"
+            type="number"
+            value={backupTimeMin}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+              setBackupTimeMin(Number(e.target.value))
+            }
+            className={`${inputBase} w-full`}
+            min={0}
+          />
+        </div>
+
+        <div>
+          <label className="block text-gray-600 text-sm mb-1" htmlFor="pf">
+            Power Factor
+          </label>
+          <input
+            id="pf"
+            type="number"
+            step={0.01}
+            min={0.6}
+            max={1}
+            value={pf}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPf(Number(e.target.value))}
+            className={`${inputBase} w-full`}
+          />
+        </div>
+
+        <div>
+          <label className="block text-gray-600 text-sm mb-1" htmlFor="eta">
+            Inverter η
+          </label>
+          <input
+            id="eta"
+            type="number"
+            step={0.01}
+            min={0.75}
+            max={0.98}
+            value={eta}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEta(Number(e.target.value))}
+            className={`${inputBase} w-full`}
+          />
+        </div>
+      </div>
+
+      {/* Headroom tip */}
+      <div className="rounded-lg border border-amber-200 bg-amber-50 text-amber-900 p-3 flex items-start gap-2">
+        <Info className="w-5 h-5 mt-0.5" />
+        <p className="text-sm">
+          <strong>Add headroom:</strong> × <code>1.25</code> for electronics, × <code>2.0–3.0</code> for motor loads (to handle inrush).
+        </p>
       </div>
 
       <button
         onClick={calculate}
-        className="no-print mt-4 w-full bg-green-600 hover:bg-green-700 transition py-3 rounded-lg font-semibold text-lg text-white"
+        className="no-print mt-2 w-full bg-green-600 hover:bg-green-700 transition py-3 rounded-lg font-semibold text-lg text-white"
         aria-label="Calculate"
       >
         Calculate
@@ -287,23 +318,25 @@ export default function CalculatorSection(props: Props) {
 
       {/* Results */}
       {result && (
-        <div className="bg-gray-50 border border-gray-200 p-4 rounded-lg space-y-4">
+        <div className="bg-gray-50 border border-gray-200 p-4 rounded-lg space-y-4 print-card">
           <h3 className="text-xl font-bold flex items-center gap-2">
             <Battery className="text-green-600 w-5 h-5" /> Engineering Results
           </h3>
-          <p>Total Load = {format(result.totalWatts)} W</p>
-          <p>PF = {format(result.pf, 2)} | Inverter η = {format(result.eta, 2)}</p>
-          <p>UPS Capacity = {format(result.upsVA)} VA → Suggested: {result.suggestedUPS} VA</p>
-          <p>DC Bus = {result.vdc} V ({result.batteryCount} × 12 V in series)</p>
-          <p>Discharge Current = {format(result.dischargeCurrentA)} A</p>
-          <p>Required Ah per string (Peukert) = {format(result.requiredAhPerString)} Ah</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <p>Total Load = {format(result.totalWatts)} W</p>
+            <p>PF = {format(result.pf, 2)} | Inverter η = {format(result.eta, 2)}</p>
+            <p>UPS Capacity = {format(result.upsVA)} VA → Suggested: {result.suggestedUPS} VA</p>
+            <p>DC Bus = {result.vdc} V ({result.batteryCount} × 12 V in series)</p>
+            <p>Discharge Current = {format(result.dischargeCurrentA)} A</p>
+            <p>Required Ah per string (Peukert) = {format(result.requiredAhPerString)} Ah</p>
+          </div>
 
           <label className="block text-gray-600 text-sm" htmlFor="battery-ah">
             Select Battery Size (Ah)
           </label>
           <select
             id="battery-ah"
-            className="bg-gray-100 text-gray-900 p-2 rounded border border-gray-300"
+            className={`${inputBase} w-full`}
             value={selectedBatteryAh ?? ""}
             onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
               const ah = Number(e.target.value);
