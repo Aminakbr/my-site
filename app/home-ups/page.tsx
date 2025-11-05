@@ -1,28 +1,32 @@
 "use client";
-import { useRef, useState } from "react";
+
+import { useCallback, useEffect, useState } from "react";
 import { Printer } from "lucide-react";
-import { useReactToPrint } from "react-to-print";
 
 import CalculatorSection from "../../components/CalculatorSection";
 import IntroSection from "../../components/IntroSection";
+import RecommendedUps from "../../components/RecommendedUps";
+
 import {
-  Chem,
-  Device,
-  Result,
-  STANDARD_UPS_SIZES,
-  MAX_STRINGS,
-  PEUKERT,
-  pickDCBusFromUps,
-  safeW,
+  Chem, Device, Result, MAX_STRINGS, STANDARD_UPS_SIZES, clamp, HEADROOM,
 } from "../../lib/ups";
 
 export default function HomeUpsPage() {
-  const reportRef = useRef<HTMLDivElement>(null);
+  // ----- client-mount guard to avoid hydration mismatches -----
+  const [isClient, setIsClient] = useState(false);
+  useEffect(() => setIsClient(true), []);
 
-  // --- State (shared) ---
+  const onPrint = useCallback(() => {
+    if (typeof window !== "undefined") window.print();
+  }, []);
+
+  // ----- calculator state -----
   const [devices, setDevices] = useState<Device[]>([{ name: "", watts: 0 }]);
-  const [backupTimeMin, setBackupTimeMin] = useState<number>(30);
   const [batteryType, setBatteryType] = useState<Chem>("leadacid");
+  const [backupTimeMin, setBackupTimeMin] = useState<number>(30);
+  const [pf, setPf] = useState<number>(0.8);
+  const [eta, setEta] = useState<number>(0.88);
+  const [headroom, setHeadroom] = useState<number>(HEADROOM.none);
   const [result, setResult] = useState<Result | null>(null);
   const [selectedBatteryAh, setSelectedBatteryAh] = useState<number | null>(null);
   const [stringCount, setStringCount] = useState<number>(1);
@@ -31,75 +35,77 @@ export default function HomeUpsPage() {
   const [search, setSearch] = useState<string>("");
   const [searchIndex, setSearchIndex] = useState<number | null>(null);
 
-  // tunables
-  const [pf, setPf] = useState<number>(0.8);
-  const [eta, setEta] = useState<number>(0.88);
+  const addDevice = () => setDevices((d) => [...d, { name: "", watts: 0 }]);
+  const removeDevice = (i: number) =>
+    setDevices((prev) => {
+      const copy = [...prev];
+      copy.splice(i, 1);
+      return copy.length ? copy : [{ name: "", watts: 0 }];
+    });
 
-  // --- Print to PDF ---
-  const handlePrint = useReactToPrint({
-    contentRef: reportRef,
-    documentTitle: "UPS_Report",
-    pageStyle: `
-      @page { size: A4; margin: 12mm; }
-      html, body { background: #ffffff !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-      .no-print { display: none !important; }
-      .print-card { break-inside: avoid; page-break-inside: avoid; }
-      .print-break { page-break-before: always; break-before: page; }
-    `,
-  });
-
-  // --- Actions / logic ---
-  const addDevice = () => setDevices((prev) => [...prev, { name: "", watts: 0 }]);
-  const removeDevice = (i: number) => {
-    const copy = [...devices];
-    copy.splice(i, 1);
-    setDevices(copy.length ? copy : [{ name: "", watts: 0 }]);
-  };
-
-  const handleSelect = (index: number, d: Device) => {
-    const updated = [...devices];
-    updated[index] = { name: d.name, watts: d.watts };
-    setDevices(updated);
+  const onSelectLibraryItem = (i: number, d: Device) => {
+    setDevices((prev) => {
+      const c = [...prev];
+      c[i] = { name: d.name, watts: d.watts };
+      return c;
+    });
     setSearch("");
     setSearchIndex(null);
   };
 
+  // ----- calculations -----
   const calculate = () => {
-    const totalWatts = devices.reduce((s, d) => s + safeW(d.watts), 0);
-    if (totalWatts <= 0) {
-      setResult(null);
-      setSelectedBatteryAh(null);
-      setStringCount(1);
-      setActualBackupMin(null);
-      setMeetsTarget(null);
-      return;
-    }
+    const P = devices.reduce((s, d) => s + (Number.isFinite(d.watts) ? d.watts : 0), 0);
+    const m = headroom || 1;
+    const Pp = P * m;
 
-    const clampedPf = Math.max(0.6, Math.min(pf, 1));
-    const upsVA = totalWatts / clampedPf;
+    const clampedPf = clamp(pf, 0.6, 1);
+    const eff = clamp(eta, 0.75, 0.98);
+
+    const upsVA = Pp / clampedPf;
     const suggestedUPS =
-      STANDARD_UPS_SIZES.find((s) => s >= upsVA) ||
+      STANDARD_UPS_SIZES.find((s) => s >= upsVA) ??
       STANDARD_UPS_SIZES[STANDARD_UPS_SIZES.length - 1];
 
-    const { vdc, batteryCount } = pickDCBusFromUps(suggestedUPS);
-    const targetHours = Math.max(0, backupTimeMin) / 60;
-    const { k, H } = PEUKERT[batteryType];
+    let vdc = 12,
+      seriesCount = 1;
+    if (suggestedUPS > 1000 && suggestedUPS <= 2000) {
+      vdc = 24;
+      seriesCount = 2;
+    } else if (suggestedUPS > 2000 && suggestedUPS <= 3000) {
+      vdc = 36;
+      seriesCount = 3;
+    } else if (suggestedUPS > 3000 && suggestedUPS <= 5000) {
+      vdc = 48;
+      seriesCount = 4;
+    } else if (suggestedUPS > 5000) {
+      vdc = 96;
+      seriesCount = 8;
+    }
 
-    const eff = Math.max(0.75, Math.min(eta, 0.98));
-    const I = totalWatts / (vdc * eff);
-    const requiredAhPerString = I * H * Math.pow(targetHours / H, 1 / k);
+    const tHours = backupTimeMin / 60;
+    const I = Pp / (vdc * eff);
+
+    const H = batteryType === "lifepo4" ? 1 : 20;
+    const k =
+      batteryType === "leadacid" ? 1.2 : batteryType === "agm" ? 1.15 : 1.05;
+
+    const Creq = I * H * Math.pow(tHours / H, 1 / k);
 
     setResult({
-      totalWatts,
+      totalWatts: P,
+      sizedWatts: Pp,
+      headroom: m,
       pf: clampedPf,
       eta: eff,
       upsVA,
       suggestedUPS,
       vdc,
-      batteryCount,
-      requiredAhPerString,
+      batteryCount: seriesCount,
+      requiredAhPerString: Creq,
       k,
-      targetHours,
+      H,
+      targetHours: tHours,
       dischargeCurrentA: I,
     });
 
@@ -110,18 +116,19 @@ export default function HomeUpsPage() {
   };
 
   const recalcRuntime = (selectedAh: number) => {
-    if (!result || !Number.isFinite(selectedAh) || selectedAh <= 0) return;
-    const { requiredAhPerString, totalWatts, vdc, eta: eff, k } = result;
-    const { H } = PEUKERT[batteryType];
+    if (!result) return;
+    const { sizedWatts, vdc, eta: eff, k, H, requiredAhPerString } = result;
 
     const neededStrings = Math.ceil(requiredAhPerString / selectedAh);
     const cappedStrings = Math.min(MAX_STRINGS, Math.max(1, neededStrings));
     const effectiveAh = selectedAh * cappedStrings;
 
-    const I = totalWatts / (vdc * eff);
+    const I = sizedWatts / (vdc * eff);
     const t_hours = H * Math.pow(effectiveAh / (I * H), k);
     const t_min = t_hours * 60;
-    const meets = effectiveAh >= requiredAhPerString && neededStrings <= MAX_STRINGS;
+
+    const meets =
+      effectiveAh >= requiredAhPerString && neededStrings <= MAX_STRINGS;
 
     setStringCount(cappedStrings);
     setActualBackupMin(t_min);
@@ -129,43 +136,30 @@ export default function HomeUpsPage() {
   };
 
   return (
-    // Suppress hydration warnings from extensions injecting attributes (e.g., fdprocessedid)
-    <div
-      className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 text-white"
-      suppressHydrationWarning
-    >
-      <style jsx global>{`
-        @media print {
-          body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-          .print-bg-white { background: #ffffff !important; }
-          .no-print { display: none !important; }
-        }
-      `}</style>
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-white text-gray-900">
+      <header className="w-full bg-white/90 border-b border-gray-200 py-3 px-6 flex justify-between items-center print-bg-white">
+        <h1 className="text-2xl font-bold text-green-700">🔋 Smart UPS Designer</h1>
 
-      {/* Header */}
-      <header
-        className="w-full bg-gray-900/80 border-b border-gray-700 py-3 px-6 flex justify-between items-center print-bg-white"
-        suppressHydrationWarning
-      >
-        <h1 className="text-2xl font-bold text-green-600">🔋 Smart UPS Designer</h1>
-        <button
-          onClick={handlePrint}
-          className="no-print inline-flex items-center gap-2 bg-white text-gray-900 px-3 py-2 rounded shadow hover:shadow-md"
-          aria-label="Print or Save as PDF"
-          suppressHydrationWarning
-        >
-          <Printer className="w-4 h-4" /> Print / Save as PDF
-        </button>
+        {/* Render the print button only after the client hydrates */}
+        {isClient ? (
+          <button
+            onClick={onPrint}
+            className="no-print inline-flex items-center gap-2 bg-white text-gray-900 px-3 py-2 rounded shadow hover:shadow-md border border-gray-200"
+            aria-label="Print or Save as PDF"
+          >
+            <Printer className="w-4 h-4" /> Print / Save as PDF
+          </button>
+        ) : (
+          // tiny placeholder to keep layout stable during SSR
+          <div className="h-9 w-36 rounded bg-gray-100 border border-gray-200" aria-hidden />
+        )}
       </header>
 
-      {/* Printable body */}
       <main
-        ref={reportRef}
         id="report-section"
-        className="flex flex-col items-center py-8 px-4 sm:px-8 bg-white text-gray-900"
+        className="flex flex-col items-center py-8 px-4 sm:px-8"
         suppressHydrationWarning
       >
-        {/* 1) Calculator FIRST */}
         <CalculatorSection
           devices={devices}
           setDevices={setDevices}
@@ -179,6 +173,8 @@ export default function HomeUpsPage() {
           setPf={setPf}
           eta={eta}
           setEta={setEta}
+          headroom={headroom}
+          setHeadroom={setHeadroom}
           result={result}
           selectedBatteryAh={selectedBatteryAh}
           setSelectedBatteryAh={setSelectedBatteryAh}
@@ -191,19 +187,30 @@ export default function HomeUpsPage() {
           setSearch={setSearch}
           searchIndex={searchIndex}
           setSearchIndex={setSearchIndex}
-          onSelectLibraryItem={handleSelect}
+          onSelectLibraryItem={onSelectLibraryItem}
         />
 
-        {/* Optional: page break before the long description when printing */}
-        <div className="print-break" />
+        {result && <RecommendedUps result={result} region="EU" />}
 
-        {/* 2) Description SECOND */}
         <IntroSection />
-
-        <footer className="mt-10 py-4 text-center text-gray-600 text-sm border-t border-gray-200 w-full max-w-3xl">
-          © 2025 Smart UPS Calculator — Built by Amina ⚡
-        </footer>
       </main>
+
+      <style jsx global>{`
+        @media print {
+          .no-print {
+            display: none !important;
+          }
+          html,
+          body {
+            background: #ffffff !important;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
+          .print-card {
+            break-inside: avoid;
+          }
+        }
+      `}</style>
     </div>
   );
 }
