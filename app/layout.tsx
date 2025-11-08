@@ -2,6 +2,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { Analytics } from "@vercel/analytics/next";
 
 const geistSans = Geist({
   subsets: ["latin"],
@@ -19,20 +20,17 @@ export const metadata: Metadata = {
   description: "Home UPS sizing and battery runtime calculator",
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    // Extensions like Grammarly inject data-* attributes on <html>/<body>.
-    // suppressHydrationWarning tells React to ignore those attribute diffs.
+    // Extensions can inject attributes; suppress hydration diffs.
     <html lang="en" suppressHydrationWarning>
       <body
         suppressHydrationWarning
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         {children}
+        {/* Mount Vercel Analytics once, at the very end of body */}
+        <Analytics />
       </body>
     </html>
   );
