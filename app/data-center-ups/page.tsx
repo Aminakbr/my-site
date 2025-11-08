@@ -1,57 +1,59 @@
 "use client";
 
+import React, { useState } from "react";
 import dynamic from "next/dynamic";
-import { useState } from "react";
 import { Printer } from "lucide-react";
-import type { Result } from "../../components/RecommendedUpsdc";
 
-// Client-only to avoid hydration mismatch
+// ✅ Import the recommendation component (default export)
+import RecommendedUpsdc from "../../components/RecommendedUpsdc";
+
+/** Minimal shape the recommendation component needs. 
+ *  If you already have a lib type, you can replace this with:
+ *    import type { Result } from "@/lib/datacenter";
+ *  and then change ResultLite -> Result below.
+ */
+type ResultLite = {
+  upsVA: number;                 // computed apparent power needed
+  suggestedUPS?: number;         // rounded/standard VA pick
+  phase?: "1P-1P" | "3P-1P" | "3P-3P";
+};
+
+// ✅ Dynamically import the calculator to avoid hydration issues
 const DataCenterCalculatorSection = dynamic(
   () => import("../../components/DataCenterCalculatorSection"),
   { ssr: false }
 );
 
-const RecommendedUpsdc = dynamic(() => import("../../components/RecommendedUpsdc"), {
-  ssr: false,
-});
-
 export default function DataCenterUpsPage() {
-  const [calcResult, setCalcResult] = useState<Result | null>(null);
+  // Calculator state (keep it minimal here; the Section can handle details)
+  const [result, setResult] = useState<ResultLite | null>(null);
+
+  const handlePrint = () => window.print();
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-emerald-50 to-white text-gray-900">
-      <header className="w-full bg-white/90 border-b border-gray-200 py-3 px-6 flex justify-between items-center print-bg-white">
-        <h1 className="text-2xl font-bold text-emerald-700">🏢 Data Center UPS Designer (3Φ/3Φ)</h1>
+    <div className="min-h-screen bg-gray-50 text-gray-900">
+      <header className="w-full bg-white/90 border-b border-gray-200 py-3 px-6 flex justify-between items-center">
+        <h1 className="text-2xl font-bold text-indigo-700">🏢 Data Center UPS Designer</h1>
         <button
-          onClick={() => { if (typeof window !== "undefined") window.print(); }}
+          onClick={handlePrint}
           className="no-print inline-flex items-center gap-2 bg-white text-gray-900 px-3 py-2 rounded shadow hover:shadow-md border border-gray-200"
           aria-label="Print or Save as PDF"
-          suppressHydrationWarning
         >
           <Printer className="w-4 h-4" /> Print / Save as PDF
         </button>
       </header>
 
-      <main className="flex flex-col items-center py-8 px-4 sm:px-8">
-        <DataCenterCalculatorSection onResultChange={setCalcResult} />
+      <main id="report-section" className="py-8 px-4 sm:px-6 flex flex-col items-center gap-8">
+        {/* The calculator should call setResult(...) with an object matching ResultLite */}
+        <DataCenterCalculatorSection setResult={setResult} />
 
-        {calcResult && (
-          <div className="w-full max-w-5xl mt-6">
-            <RecommendedUpsdc result={calcResult} title="Data Center Recomand" />
-          </div>
-        )}
+        {/* Show recommendations when we have a result */}
+        {result && <RecommendedUpsdc result={result} title="Recommended UPS (Data Center — Transformerless & Modular)" />}
 
-        <footer className="mt-10 py-4 text-center text-gray-500 text-sm border-t border-gray-200 w-full max-w-5xl">
+        <footer className="text-xs text-gray-500 py-8">
           © 2025 Data Center UPS Calculator — Built by Amina ⚡
         </footer>
       </main>
-
-      <style jsx global>{`
-        @media print {
-          .no-print { display: none !important; }
-          .print-bg-white { background: #fff !important; }
-        }
-      `}</style>
     </div>
   );
 }

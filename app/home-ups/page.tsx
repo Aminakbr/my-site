@@ -5,11 +5,32 @@ import { Printer } from "lucide-react";
 
 import CalculatorSection from "../../components/CalculatorSection";
 import IntroSection from "../../components/IntroSection";
-import RecommendedUps from "../../components/RecommendedUps";
+import RecommendedUps, { AmazonTags } from "../../components/RecommendedUps";
 
 import {
-  Chem, Device, Result, MAX_STRINGS, STANDARD_UPS_SIZES, clamp, HEADROOM,
+  Chem,
+  Device,
+  Result,
+  MAX_STRINGS,
+  STANDARD_UPS_SIZES,
+  clamp,
+  HEADROOM,
 } from "../../lib/ups";
+
+/* ─────────────────────────────── Amazon (optional) ─────────────────────────────── */
+const AMAZON_TAGS: AmazonTags = {
+  US: "yourtag-20",
+  UK: "yourtag-21",
+  DE: "dein-tag-21",
+  FR: "votre-tag-21",
+  IT: "iltuo-tag-21",
+  ES: "tutag-21",
+  CA: "yourtagca-20",
+  JP: "あなたのタグ-22",
+  AU: "yourtagau-22",
+  AE: "yourtag-21",
+  IN: "yourtag-21",
+};
 
 export default function HomeUpsPage() {
   // ----- client-mount guard to avoid hydration mismatches -----
@@ -27,11 +48,13 @@ export default function HomeUpsPage() {
   const [pf, setPf] = useState<number>(0.8);
   const [eta, setEta] = useState<number>(0.88);
   const [headroom, setHeadroom] = useState<number>(HEADROOM.none);
+
   const [result, setResult] = useState<Result | null>(null);
   const [selectedBatteryAh, setSelectedBatteryAh] = useState<number | null>(null);
   const [stringCount, setStringCount] = useState<number>(1);
   const [actualBackupMin, setActualBackupMin] = useState<number | null>(null);
   const [meetsTarget, setMeetsTarget] = useState<boolean | null>(null);
+
   const [search, setSearch] = useState<string>("");
   const [searchIndex, setSearchIndex] = useState<number | null>(null);
 
@@ -67,8 +90,8 @@ export default function HomeUpsPage() {
       STANDARD_UPS_SIZES.find((s) => s >= upsVA) ??
       STANDARD_UPS_SIZES[STANDARD_UPS_SIZES.length - 1];
 
-    let vdc = 12,
-      seriesCount = 1;
+    let vdc = 12;
+    let seriesCount = 1;
     if (suggestedUPS > 1000 && suggestedUPS <= 2000) {
       vdc = 24;
       seriesCount = 2;
@@ -87,8 +110,7 @@ export default function HomeUpsPage() {
     const I = Pp / (vdc * eff);
 
     const H = batteryType === "lifepo4" ? 1 : 20;
-    const k =
-      batteryType === "leadacid" ? 1.2 : batteryType === "agm" ? 1.15 : 1.05;
+    const k = batteryType === "leadacid" ? 1.2 : batteryType === "agm" ? 1.15 : 1.05;
 
     const Creq = I * H * Math.pow(tHours / H, 1 / k);
 
@@ -150,7 +172,6 @@ export default function HomeUpsPage() {
             <Printer className="w-4 h-4" /> Print / Save as PDF
           </button>
         ) : (
-          // tiny placeholder to keep layout stable during SSR
           <div className="h-9 w-36 rounded bg-gray-100 border border-gray-200" aria-hidden />
         )}
       </header>
@@ -190,7 +211,15 @@ export default function HomeUpsPage() {
           onSelectLibraryItem={onSelectLibraryItem}
         />
 
-        {result && <RecommendedUps result={result} region="EU" />}
+        {/* ✅ Show recommendations once (with Amazon tags) */}
+        {result && (
+          <RecommendedUps
+            result={result}
+            initialMarket="US"
+            amazonTags={AMAZON_TAGS}
+            regionLabel="Global"
+          />
+        )}
 
         <IntroSection />
       </main>

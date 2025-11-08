@@ -1,144 +1,160 @@
 "use client";
 
 import React from "react";
-import { CheckCircle2, AlertTriangle, ExternalLink, Building2, Cpu } from "lucide-react";
 
-/* Public result shape coming from the calculator */
-export type Result = {
-  upsVA: number;              // computed VA needed
-  suggestedUPS?: number;      // not used for 3P flow, but allowed
-  phase?: "1P-1P" | "3P-3P";  // calculator may pass this; we default to 3P-3P
-  sizedWatts: number;         // P′ after headroom
-  pf: number;
-  eta: number;
+/** Adjust this import if your Result type lives elsewhere. 
+ *  If you don’t have a Result type exported, you can keep the local ResultLite below.
+ */
+// import { Result } from "@/lib/datacenter";
+
+/** Minimal shape we need from calculator results.
+ *  If you already have a Result type in your lib, remove this and import that instead.
+ */
+type ResultLite = {
+  upsVA: number;                 // computed apparent power needed
+  suggestedUPS?: number;         // rounded/standard VA pick
+  phase?: "1P-1P" | "3P-1P" | "3P-3P"; // preferred phase topology, if any
 };
 
 type Props = {
-  result: Result;
-  title?: string; // e.g., "Data Center Recomand"
+  result: ResultLite;
+  title?: string;
 };
 
-type UpsModel = {
-  brand: "GTEC" | "GE" | "BOORI";
-  series: string;
-  phase: "1P-1P" | "3P-3P";
-  va: number;
-  category: "Transformerless" | "Modular";
-  url: string;     // put your real product/affiliate link or a /go/slug
+/** Simple catalog entries for Data Center UPS (Transformerless & Modular) */
+type CatalogItem = {
+  brand: string;
+  model: string;
+  va: number;              // nominal VA rating
+  topology: "Transformerless" | "Modular";
+  phase: "3P-3P" | "3P-1P" | "1P-1P";
   notes?: string;
+  url?: string;            // optional product page
 };
 
-/* Catalog (edit names/links to match your SKUs) */
-const CATALOG_3P: UpsModel[] = [
-  // ===== Transformer-less (Double Conversion w/o output transformer) =====
-  { brand: "GTEC",  series: "TLX 10K",   phase: "3P-3P", va: 10000,  category: "Transformerless", url: "/go/gtec-tlx-10k" },
-  { brand: "GTEC",  series: "TLX 20K",   phase: "3P-3P", va: 20000,  category: "Transformerless", url: "/go/gtec-tlx-20k" },
-  { brand: "GTEC",  series: "TLX 40K",   phase: "3P-3P", va: 40000,  category: "Transformerless", url: "/go/gtec-tlx-40k" },
-  { brand: "GTEC",  series: "TLX 80K",   phase: "3P-3P", va: 80000,  category: "Transformerless", url: "/go/gtec-tlx-80k" },
-  { brand: "GTEC",  series: "TLX 120K",  phase: "3P-3P", va: 120000, category: "Transformerless", url: "/go/gtec-tlx-120k" },
+// === Transformerless (monolithic frames) ===
+const CATALOG_3P: CatalogItem[] = [
+  { brand: "Schneider Electric", model: "Galaxy VS 20kVA",  va: 20000, topology: "Transformerless", phase: "3P-3P" },
+  { brand: "Schneider Electric", model: "Galaxy VS 50kVA",  va: 50000, topology: "Transformerless", phase: "3P-3P" },
+  { brand: "Schneider Electric", model: "Galaxy VM 100kVA", va: 100000, topology: "Transformerless", phase: "3P-3P" },
 
-  { brand: "GE",    series: "TLE 10K",   phase: "3P-3P", va: 10000,  category: "Transformerless", url: "/go/ge-tle-10k" },
-  { brand: "GE",    series: "TLE 20K",   phase: "3P-3P", va: 20000,  category: "Transformerless", url: "/go/ge-tle-20k" },
-  { brand: "GE",    series: "TLE 40K",   phase: "3P-3P", va: 40000,  category: "Transformerless", url: "/go/ge-tle-40k" },
-  { brand: "GE",    series: "TLE 80K",   phase: "3P-3P", va: 80000,  category: "Transformerless", url: "/go/ge-tle-80k" },
-  { brand: "GE",    series: "TLE 120K",  phase: "3P-3P", va: 120000, category: "Transformerless", url: "/go/ge-tle-120k" },
+  { brand: "Vertiv", model: "Liebert EXS 20kVA",  va: 20000, topology: "Transformerless", phase: "3P-3P" },
+  { brand: "Vertiv", model: "Liebert EXS 40kVA",  va: 40000, topology: "Transformerless", phase: "3P-3P" },
+  { brand: "Vertiv", model: "Liebert EXL S1 100kVA", va: 100000, topology: "Transformerless", phase: "3P-3P" },
 
-  { brand: "BOORI", series: "DataLine TL 10K",  phase: "3P-3P", va: 10000,  category: "Transformerless", url: "/go/boori-tl-10k" },
-  { brand: "BOORI", series: "DataLine TL 20K",  phase: "3P-3P", va: 20000,  category: "Transformerless", url: "/go/boori-tl-20k" },
-  { brand: "BOORI", series: "DataLine TL 40K",  phase: "3P-3P", va: 40000,  category: "Transformerless", url: "/go/boori-tl-40k" },
-  { brand: "BOORI", series: "DataLine TL 80K",  phase: "3P-3P", va: 80000,  category: "Transformerless", url: "/go/boori-tl-80k" },
-  { brand: "BOORI", series: "DataLine TL 120K", phase: "3P-3P", va: 120000, category: "Transformerless", url: "/go/boori-tl-120k" },
+  { brand: "Eaton", model: "93E 20kVA",  va: 20000, topology: "Transformerless", phase: "3P-3P" },
+  { brand: "Eaton", model: "93E 40kVA",  va: 40000, topology: "Transformerless", phase: "3P-3P" },
+  { brand: "Eaton", model: "93PM 100kVA", va: 100000, topology: "Transformerless", phase: "3P-3P" },
 
-  // ===== Modular (frame + power modules; N+1 scaling) =====
-  { brand: "GTEC",  series: "ModuRack 60K (N+1)",  phase: "3P-3P", va: 60000,  category: "Modular", url: "/go/gtec-mod-60k", notes: "Scalable frame, hot-swappable modules" },
-  { brand: "GTEC",  series: "ModuRack 120K (N+1)", phase: "3P-3P", va: 120000, category: "Modular", url: "/go/gtec-mod-120k", notes: "Add modules as you grow" },
+  { brand: "Riello", model: "Multi Sentry 20kVA",  va: 20000, topology: "Transformerless", phase: "3P-3P" },
+  { brand: "Riello", model: "Sentryum 40kVA",      va: 40000, topology: "Transformerless", phase: "3P-3P" },
+  { brand: "Riello", model: "NextEnergy 100kVA",    va: 100000, topology: "Transformerless", phase: "3P-3P" },
 
-  { brand: "GE",    series: "Modular 60K (N+1)",   phase: "3P-3P", va: 60000,  category: "Modular", url: "/go/ge-mod-60k", notes: "Redundant modules, front-serviceable" },
-  { brand: "GE",    series: "Modular 120K (N+1)",  phase: "3P-3P", va: 120000, category: "Modular", url: "/go/ge-mod-120k" },
-
-  { brand: "BOORI", series: "RackMod 60K (N+1)",   phase: "3P-3P", va: 60000,  category: "Modular", url: "/go/boori-mod-60k" },
-  { brand: "BOORI", series: "RackMod 120K (N+1)",  phase: "3P-3P", va: 120000, category: "Modular", url: "/go/boori-mod-120k" },
+  { brand: "Huawei", model: "UPS5000-A 20kVA",  va: 20000, topology: "Transformerless", phase: "3P-3P" },
+  { brand: "Huawei", model: "UPS5000-A 50kVA",  va: 50000, topology: "Transformerless", phase: "3P-3P" },
+  { brand: "Huawei", model: "UPS5000-A 100kVA", va: 100000, topology: "Transformerless", phase: "3P-3P" },
 ];
 
-function pickNext(vaNeeded: number, items: UpsModel[]) {
-  const sorted = [...items].sort((a, b) => a.va - b.va);
-  return sorted.find((m) => m.va >= vaNeeded) ?? sorted[sorted.length - 1];
-}
+// === Modular frames (hot-swappable power modules) ===
+const CATALOG_MODULAR: CatalogItem[] = [
+  { brand: "Schneider Electric", model: "Galaxy VL (50–200kVA)", va: 200000, topology: "Modular", phase: "3P-3P", notes: "Scalable in modules" },
+  { brand: "Vertiv",             model: "Liebert HPL (50–200kVA)", va: 200000, topology: "Modular", phase: "3P-3P", notes: "Scalable in modules" },
+  { brand: "Eaton",              model: "93PM (50–200kVA)",        va: 200000, topology: "Modular", phase: "3P-3P", notes: "Scalable in modules" },
+  { brand: "Riello",             model: "Multi Power MPW",         va: 200000, topology: "Modular", phase: "3P-3P", notes: "Scalable in modules" },
+  { brand: "Huawei",             model: "FusionPower 5000-E",      va: 200000, topology: "Modular", phase: "3P-3P", notes: "Scalable in modules" },
+];
 
-function Card({ m }: { m: UpsModel }) {
-  return (
-    <a
-      href={m.url}
-      className="block rounded-xl border border-gray-200 hover:border-gray-300 bg-white p-4 shadow-sm hover:shadow-md transition"
-      target="_blank"
-      rel="noopener noreferrer"
-    >
-      <div className="flex items-center gap-2 text-gray-700 mb-1">
-        <Building2 className="w-4 h-4" />
-        <span className="text-xs uppercase tracking-wide">{m.brand}</span>
-      </div>
-      <h4 className="text-lg font-bold">{m.series}</h4>
-      <p className="text-sm text-gray-600">
-        {m.category} • {m.phase} • {m.va.toLocaleString()} VA
-      </p>
-      {m.notes && <p className="text-xs text-gray-500 mt-1">{m.notes}</p>}
-      <div className="mt-3 inline-flex items-center gap-1 text-emerald-700 text-sm font-medium">
-        View details <ExternalLink className="w-4 h-4" />
-      </div>
-    </a>
-  );
+/** Pick N items around the target VA, prefer equals or the next sizes up */
+function pickNearest(catalog: CatalogItem[], vaNeeded: number, count = 4): CatalogItem[] {
+  const list = [...catalog].sort((a, b) => a.va - b.va);
+  // find first >= needed
+  let idx = list.findIndex((x) => x.va >= vaNeeded);
+  if (idx === -1) idx = list.length - 1;
+
+  const start = Math.max(0, idx - 1);
+  const end = Math.min(list.length, start + count);
+  return list.slice(start, end);
 }
 
 export default function RecommendedUpsdc({ result, title }: Props) {
-  // prefer the calculator's phase, but default to 3P-3P
-  const phase = (result.phase ?? "3P-3P") as const;
+  // Use provided phase if present, otherwise default to 3P-3P (most DC rooms)
+  const phase: "1P-1P" | "3P-1P" | "3P-3P" = result.phase ?? "3P-3P";
+
+  // Choose a VA target based on the larger of computed requirement vs. “suggested”
   const vaNeeded = Math.max(result.upsVA, result.suggestedUPS ?? 0);
 
-  const tlItems  = CATALOG_3P.filter((m) => m.category === "Transformerless");
-  const modItems = CATALOG_3P.filter((m) => m.category === "Modular");
+  // Filter by phase (most entries here are 3P-3P; adapt if you add others)
+  const tlItems = CATALOG_3P.filter((m) => m.phase === phase);
+  const mdItems = CATALOG_MODULAR.filter((m) => m.phase === phase);
 
-  const picksTL = ["GTEC", "GE", "BOORI"]
-    .map((brand) => pickNext(vaNeeded, tlItems.filter((m) => m.brand === (brand as UpsModel["brand"]))))
-    .filter(Boolean) as UpsModel[];
-
-  const picksMod = ["GTEC", "GE", "BOORI"]
-    .map((brand) => pickNext(vaNeeded, modItems.filter((m) => m.brand === (brand as UpsModel["brand"]))))
-    .filter(Boolean) as UpsModel[];
+  const tlPick = pickNearest(tlItems.length > 0 ? tlItems : CATALOG_3P, vaNeeded, 4);
+  const mdPick = pickNearest(mdItems.length > 0 ? mdItems : CATALOG_MODULAR, vaNeeded, 4);
 
   return (
-    <section className="w-full max-w-5xl mt-6">
-      <div className="flex items-center gap-2 mb-2">
-        <CheckCircle2 className="w-5 h-5 text-emerald-700" />
-        <h3 className="text-xl font-bold">{title ?? "Recommended UPS for Data Center"}</h3>
-      </div>
-
-      <p className="text-sm text-gray-700 mb-4 flex items-center gap-2">
-        <Cpu className="w-4 h-4" />
-        We size to the next model at or above <b>{vaNeeded.toLocaleString()} VA</b> ({phase}).
-        For growth and maintenance windows, consider one size higher or Modular (N+1).
+    <section className="w-full max-w-5xl bg-white border border-gray-200 rounded-2xl p-6 shadow">
+      <h2 className="text-2xl font-bold mb-2">
+        {title ?? "Recommended UPS (Data Center — Transformerless & Modular)"}
+      </h2>
+      <p className="text-sm text-gray-600 mb-4">
+        Phase: <b>{phase}</b> &middot; Sizing target: <b>{Math.round(vaNeeded)} VA</b>
       </p>
 
-      <h4 className="text-lg font-semibold mb-2">Transformer-less (Double Conversion)</h4>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {picksTL.map((m) => (
-          <Card key={`${m.brand}-${m.series}-${m.va}-${m.category}`} m={m} />
-        ))}
+      <div className="grid md:grid-cols-2 gap-6">
+        <div className="border rounded-xl p-4">
+          <h3 className="font-semibold text-lg mb-2">Transformerless (Monolithic)</h3>
+          <ul className="space-y-3">
+            {tlPick.map((item, i) => (
+              <li key={`${item.brand}-${item.model}-${i}`} className="flex items-start justify-between gap-4">
+                <div>
+                  <div className="font-medium">{item.brand} — {item.model}</div>
+                  <div className="text-sm text-gray-600">{item.topology} · {item.phase} · {item.va.toLocaleString()} VA</div>
+                  {item.notes && <div className="text-xs text-gray-500">{item.notes}</div>}
+                </div>
+                {/* optional link */}
+                {item.url && (
+                  <a
+                    className="text-sm text-blue-600 hover:underline"
+                    href={item.url}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Specs
+                  </a>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <div className="border rounded-xl p-4">
+          <h3 className="font-semibold text-lg mb-2">Modular (Scalable)</h3>
+          <ul className="space-y-3">
+            {mdPick.map((item, i) => (
+              <li key={`${item.brand}-${item.model}-${i}`} className="flex items-start justify-between gap-4">
+                <div>
+                  <div className="font-medium">{item.brand} — {item.model}</div>
+                  <div className="text-sm text-gray-600">{item.topology} · {item.phase} · {item.va.toLocaleString()} VA</div>
+                  {item.notes && <div className="text-xs text-gray-500">{item.notes}</div>}
+                </div>
+                {item.url && (
+                  <a
+                    className="text-sm text-blue-600 hover:underline"
+                    href={item.url}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Specs
+                  </a>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
       </div>
 
-      <h4 className="text-lg font-semibold mt-6 mb-2">Modular (N+1 / Scalable)</h4>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {picksMod.map((m) => (
-          <Card key={`${m.brand}-${m.series}-${m.va}-${m.category}`} m={m} />
-        ))}
-      </div>
-
-      <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 text-amber-900 p-3 text-sm flex items-start gap-2">
-        <AlertTriangle className="w-4 h-4 mt-0.5" />
-        <p>
-          <b>Note:</b> Replace <code>url</code> values with your real product pages or affiliate links,
-          or point them to your <code>/go/[slug]</code> redirector.
-        </p>
-      </div>
+      <p className="mt-4 text-xs text-gray-500">
+        Note: Models are examples—always confirm local availability, runtime options (internal/external batteries), and communications (SNMP/Modbus) with your distributor.
+      </p>
     </section>
   );
 }
